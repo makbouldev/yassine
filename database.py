@@ -90,7 +90,7 @@ def get_connection():
                 "DATABASE_URL is configured, but the PostgreSQL driver is missing. "
                 "Run: pip install -r requirements.txt"
             ) from exc
-        return psycopg.connect(_postgres_url())
+        return psycopg.connect(_postgres_url(), prepare_threshold=None)
 
     return sqlite3.connect(DB_FILE)
 
