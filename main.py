@@ -29,6 +29,7 @@ class App(ctk.CTk):
         self.show_login()
 
     def show_login(self):
+        self.withdraw()
         self.login_window = LoginWindow(self, self.on_login_success)
 
     def on_login_success(self, username, role):
@@ -38,16 +39,40 @@ class App(ctk.CTk):
         self.top_frame = ctk.CTkFrame(self, fg_color="transparent")
         self.top_frame.pack(fill="x", padx=10, pady=(10, 0))
         
-        ctk.CTkLabel(self.top_frame, text=f"Logged in as: {username} ({role})", font=ctk.CTkFont(weight="bold")).pack(side="left")
+        ctk.CTkLabel(
+            self.top_frame,
+            text=f"Logged in as: {username} ({role})",
+            font=ctk.CTkFont(weight="bold"),
+        ).pack(side="left")
+
+        ctk.CTkButton(
+            self.top_frame,
+            text="Logout",
+            command=self.logout,
+            fg_color="#dc3545",
+            hover_color="#bb2d3b",
+            width=90,
+        ).pack(side="right", padx=(8, 0))
         
         if role == 'admin':
-            ctk.CTkButton(self.top_frame, text="Admin Dashboard", command=self.open_admin_panel, fg_color="#28a745", hover_color="#218838").pack(side="right")
+            ctk.CTkButton(
+                self.top_frame,
+                text="Admin Dashboard",
+                command=self.open_admin_panel,
+                fg_color="#28a745",
+                hover_color="#218838",
+            ).pack(side="right")
             
         self.editor = ExcelEditor(self, username)
         self.editor.pack(fill="both", expand=True)
 
     def open_admin_panel(self):
         AdminPanel(self)
+
+    def logout(self):
+        for child in self.winfo_children():
+            child.destroy()
+        self.show_login()
 
 if __name__ == "__main__":
     database.init_db()
