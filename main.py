@@ -11,7 +11,7 @@ class App(ctk.CTk):
     def __init__(self):
         super().__init__()
 
-        self.title("Excel Manager")
+        self.title("Gestionnaire Excel")
         self.geometry("800x600")
         
         # Center the window
@@ -41,23 +41,23 @@ class App(ctk.CTk):
         
         ctk.CTkLabel(
             self.top_frame,
-            text=f"Logged in as: {username} ({role})",
+            text=f"Connecté en tant que : {username} ({self._role_label(role)})",
             font=ctk.CTkFont(weight="bold"),
         ).pack(side="left")
 
         ctk.CTkButton(
             self.top_frame,
-            text="Logout",
+            text="Déconnexion",
             command=self.logout,
             fg_color="#dc3545",
             hover_color="#bb2d3b",
-            width=90,
+            width=120,
         ).pack(side="right", padx=(8, 0))
         
         if role == 'admin':
             ctk.CTkButton(
                 self.top_frame,
-                text="Admin Dashboard",
+                text="Administration",
                 command=self.open_admin_panel,
                 fg_color="#28a745",
                 hover_color="#218838",
@@ -73,6 +73,9 @@ class App(ctk.CTk):
         for child in self.winfo_children():
             child.destroy()
         self.show_login()
+
+    def _role_label(self, role):
+        return "administrateur" if role == "admin" else "utilisateur"
 
 if __name__ == "__main__":
     database.init_db()

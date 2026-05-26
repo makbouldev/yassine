@@ -3,7 +3,7 @@ import customtkinter as ctk
 class LoginWindow(ctk.CTkToplevel):
     def __init__(self, parent, on_success):
         super().__init__(parent)
-        self.title("Login")
+        self.title("Connexion")
         self.geometry("400x300")
         self.resizable(False, False)
         
@@ -23,16 +23,16 @@ class LoginWindow(ctk.CTkToplevel):
         self.grab_set()
 
         # UI Elements
-        self.title_label = ctk.CTkLabel(self, text="Welcome", font=ctk.CTkFont(size=24, weight="bold"))
+        self.title_label = ctk.CTkLabel(self, text="Bienvenue", font=ctk.CTkFont(size=24, weight="bold"))
         self.title_label.pack(pady=(30, 20))
 
-        self.username_entry = ctk.CTkEntry(self, placeholder_text="Username (admin)", width=200)
+        self.username_entry = ctk.CTkEntry(self, placeholder_text="Nom d'utilisateur", width=200)
         self.username_entry.pack(pady=(0, 15))
 
-        self.password_entry = ctk.CTkEntry(self, placeholder_text="Password (admin)", show="*", width=200)
+        self.password_entry = ctk.CTkEntry(self, placeholder_text="Mot de passe", show="*", width=200)
         self.password_entry.pack(pady=(0, 20))
 
-        self.login_button = ctk.CTkButton(self, text="Login", command=self.login, width=200)
+        self.login_button = ctk.CTkButton(self, text="Se connecter", command=self.login, width=200)
         self.login_button.pack()
 
         self.error_label = ctk.CTkLabel(self, text="", text_color="red")
@@ -52,4 +52,4 @@ class LoginWindow(ctk.CTkToplevel):
             self.destroy()
             self.on_success(username, role)
         else:
-            self.error_label.configure(text="Invalid credentials!")
+            self.error_label.configure(text="Identifiants invalides.")

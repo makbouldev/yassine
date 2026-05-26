@@ -21,7 +21,7 @@ class ExcelEditor(ctk.CTkFrame):
 
         self.save_button = ctk.CTkButton(
             self.top_bar,
-            text="Save Changes",
+            text="Enregistrer",
             command=self.save_file,
             state="disabled",
         )
@@ -29,31 +29,31 @@ class ExcelEditor(ctk.CTkFrame):
 
         self.refresh_button = ctk.CTkButton(
             self.top_bar,
-            text="Refresh",
+            text="Actualiser",
             command=self.load_table,
             fg_color="#6c757d",
             hover_color="#5a6268",
-            width=90,
+            width=100,
         )
         self.refresh_button.pack(side="left", padx=5)
 
         self.import_button = ctk.CTkButton(
             self.top_bar,
-            text="Import Excel",
+            text="Importer",
             command=self.import_excel,
             fg_color="#0d6efd",
             hover_color="#0b5ed7",
-            width=110,
+            width=100,
         )
         self.import_button.pack(side="left", padx=5)
 
         self.export_button = ctk.CTkButton(
             self.top_bar,
-            text="Export Excel",
+            text="Exporter",
             command=self.export_excel,
             fg_color="#28a745",
             hover_color="#218838",
-            width=110,
+            width=100,
         )
         self.export_button.pack(side="left", padx=5)
 
@@ -73,11 +73,11 @@ class ExcelEditor(ctk.CTkFrame):
 
         self.add_btn = ctk.CTkButton(
             self.input_frame,
-            text="Add",
+            text="Ajouter",
             command=self.add_from_inputs,
             fg_color="#17a2b8",
             hover_color="#138496",
-            width=70,
+            width=80,
         )
         self.add_btn.pack(side="left", padx=10, pady=(18, 0))
 
@@ -291,11 +291,11 @@ class ExcelEditor(ctk.CTkFrame):
         filepath = filedialog.askopenfilename(
             title="Importer un fichier",
             filetypes=[
-                ("Supported files", "*.xlsx *.xls *.csv *.tsv *.txt"),
-                ("Excel files", "*.xlsx *.xls"),
-                ("CSV files", "*.csv"),
-                ("Text files", "*.tsv *.txt"),
-                ("All files", "*.*"),
+                ("Fichiers pris en charge", "*.xlsx *.xls *.csv *.tsv *.txt"),
+                ("Fichiers Excel", "*.xlsx *.xls"),
+                ("Fichiers CSV", "*.csv"),
+                ("Fichiers texte", "*.tsv *.txt"),
+                ("Tous les fichiers", "*.*"),
             ],
         )
         if not filepath:
@@ -321,8 +321,8 @@ class ExcelEditor(ctk.CTkFrame):
             self.recalculate()
             self.after(100, self._fit_columns)
             messagebox.showinfo(
-                "Import Excel",
-                "Fichier importé avec succès.\nVérifie ou modifie les données, puis clique sur Save Changes.",
+                "Importation",
+                "Fichier importé avec succès.\nVérifiez ou modifiez les données, puis cliquez sur Enregistrer.",
             )
         except Exception as exc:
             messagebox.showerror("Erreur", f"Impossible d'importer:\n{exc}")
@@ -336,8 +336,8 @@ class ExcelEditor(ctk.CTkFrame):
         filepath = filedialog.asksaveasfilename(
             title="Exporter vers Excel",
             defaultextension=".xlsx",
-            filetypes=[("Excel files", "*.xlsx")],
-            initialfile="export_table.xlsx",
+            filetypes=[("Fichiers Excel", "*.xlsx")],
+            initialfile="export_tableau.xlsx",
         )
         if not filepath:
             return
@@ -346,7 +346,7 @@ class ExcelEditor(ctk.CTkFrame):
             data = self.sheet.get_sheet_data()
             export_df = self._prepare_export_dataframe(data, headers)
             self._write_styled_excel(filepath, export_df)
-            messagebox.showinfo("Succès", f"Export Excel créé:\n{filepath}")
+            messagebox.showinfo("Succès", f"Exportation créée:\n{filepath}")
         except Exception as exc:
             messagebox.showerror("Erreur", f"Impossible d'exporter:\n{exc}")
 
@@ -569,4 +569,4 @@ class ExcelEditor(ctk.CTkFrame):
                     database.log_edit(self.current_user, row_index + 2, column, old_value, new_value)
 
         for row_index in range(len(old_df), len(new_df)):
-            database.log_edit(self.current_user, row_index + 2, "ROW", "", "ADDED")
+            database.log_edit(self.current_user, row_index + 2, "LIGNE", "", "AJOUTÉE")
