@@ -1,5 +1,6 @@
 import customtkinter as ctk
 import pandas as pd
+from datetime import datetime
 from tkinter import filedialog, messagebox
 from tksheet import Sheet
 
@@ -291,11 +292,167 @@ class ExcelEditor(ctk.CTkFrame):
 
         try:
             data = self.sheet.get_sheet_data()
-            export_df = pd.DataFrame(data, columns=headers)
-            export_df.to_excel(filepath, index=False)
+            export_df = self._prepare_export_dataframe(data, headers)
+            self._write_styled_excel(filepath, export_df)
             messagebox.showinfo("Succès", f"Export Excel créé:\n{filepath}")
         except Exception as exc:
             messagebox.showerror("Erreur", f"Impossible d'exporter:\n{exc}")
+
+    def _prepare_export_dataframe(self, data, headers):
+        export_df = pd.DataFrame(data, columns=headers)
+        for column in self._money_columns(headers):
+            export_df[column] = export_df[column].apply(self._parse_money)
+        return export_df
+
+    def _write_styled_excel(self, filepath, export_df):
+        from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+        from openpyxl.utils import get_column_letter
+
+        sheet_name = "Tableau"
+        header_row = 4
+        data_start_row = header_row + 1
+        row_count = len(export_df)
+        total_row = data_start_row + row_count
+
+        with pd.ExcelWriter(filepath, engine="openpyxl") as writer:
+            export_df.to_excel(writer, sheet_name=sheet_name, startrow=header_row - 1, index=False)
+            workbook = writer.book
+            worksheet = writer.sheets[sheet_name]
+
+            max_col = max(1, len(export_df.columns))
+            max_col_letter = get_column_letter(max_col)
+
+            worksheet.merge_cells(start_row=1, start_column=1, end_row=1, end_column=max_col)
+            title_cell = worksheet.cell(row=1, column=1)
+            title_cell.value = "Export Tableau"
+            title_cell.font = Font(size=16, bold=True, color="FFFFFF")
+            title_cell.fill = PatternFill("solid", fgColor="1F4E78")
+            title_cell.alignment = Alignment(horizontal="center", vertical="center")
+            worksheet.row_dimensions[1].height = 30
+
+            worksheet.merge_cells(start_row=2, start_column=1, end_row=2, end_column=max_col)
+            subtitle_cell = worksheet.cell(row=2, column=1)
+            subtitle_cell.value = f"Exporté le {datetime.now().strftime('%Y-%m-%d %H:%M')}"
+            subtitle_cell.font = Font(size=10, italic=True, color="666666")
+            subtitle_cell.alignment = Alignment(horizontal="center", vertical="center")
+
+            header_fill = PatternFill("solid", fgColor="245C8A")
+            band_fill = PatternFill("solid", fgColor="F4F8FB")
+            total_fill = PatternFill("solid", fgColor="D9EAF7")
+            thin_side = Side(style="thin", color="B7C9D6")
+            medium_side = Side(style="medium", color="1F4E78")
+            border = Border(left=thin_side, right=thin_side, top=thin_side, bottom=thin_side)
+            header_border = Border(left=thin_side, right=thin_side, top=medium_side, bottom=medium_side)
+
+            for cell in worksheet[header_row]:
+                cell.fill = header_fill
+                cell.font = Font(bold=True, color="FFFFFF")
+                cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+                cell.border = header_border
+            worksheet.row_dimensions[header_row].height = 24
+
+            for row_idx in range(data_start_row, total_row):
+                if (row_idx - data_start_row) % 2 == 1:
+                    for cell in worksheet[row_idx]:
+                        cell.fill = band_fill
+                for cell in worksheet[row_idx]:
+                    cell.border = border
+                    cell.alignment = Alignment(vertical="center", wrap_text=True)
+
+            money_columns = set(self._money_columns(export_df.columns))
+            for col_idx, header in enumerate(export_df.columns, start=1):
+                letter = get_column_letter(col_idx)
+                if header in money_columns:
+                    for row_idx in range(data_start_row, total_row):
+                        cell = worksheet.cell(row=row_idx, column=col_idx)
+                        cell.number_format = '#,##0.00'
+                        cell.alignment = Alignment(horizontal="right", vertical="center")
+                elif self._normal_header(header) in {"n_fact", "rep", "date", "recu"}:
+                    for row_idx in range(data_start_row, total_row):
+                        worksheet.cell(row=row_idx, column=col_idx).alignment = Alignment(
+                            horizontal="center",
+                            vertical="center",
+                        )
+                worksheet.column_dimensions[letter].width = self._export_column_width(header, export_df[header])
+
+            worksheet.cell(row=total_row, column=1).value = "TOTAUX"
+            for col_idx, header in enumerate(export_df.columns, start=1):
+                cell = worksheet.cell(row=total_row, column=col_idx)
+                cell.fill = total_fill
+                cell.font = Font(bold=True, color="1F4E78")
+                cell.border = header_border
+                cell.alignment = Alignment(horizontal="center" if col_idx == 1 else "right", vertical="center")
+                if header in money_columns:
+                    letter = get_column_letter(col_idx)
+                    cell.value = f"=SUM({letter}{data_start_row}:{letter}{total_row - 1})" if row_count else 0
+                    cell.number_format = '#,##0.00'
+            worksheet.row_dimensions[total_row].height = 24
+
+            worksheet.auto_filter.ref = (
+                f"A{header_row}:{max_col_letter}{total_row - 1}"
+                if row_count
+                else f"A{header_row}:{max_col_letter}{header_row}"
+            )
+            worksheet.freeze_panes = f"A{data_start_row}"
+            worksheet.sheet_view.showGridLines = False
+            worksheet.page_setup.orientation = "landscape"
+            worksheet.page_setup.fitToWidth = 1
+            worksheet.page_setup.fitToHeight = 0
+            worksheet.sheet_properties.pageSetUpPr.fitToPage = True
+            workbook.active = workbook.index(worksheet)
+
+    def _money_columns(self, headers):
+        expected = {"versement", "debours", "honoraires", "tva", "honors_ht"}
+        return [header for header in headers if self._normal_header(header) in expected]
+
+    def _normal_header(self, header):
+        text = str(header).strip().lower()
+        replacements = {
+            "°": "",
+            "Â°": "",
+            "é": "e",
+            "Ã©": "e",
+            "ç": "c",
+            "Ã§": "c",
+            ".": "",
+            "/": "_",
+            " ": "_",
+            "'": "",
+        }
+        for old, new in replacements.items():
+            text = text.replace(old, new)
+        return text
+
+    def _parse_money(self, value):
+        text = str(value).strip()
+        if not text or text.lower() == "nan":
+            return None
+        try:
+            return float(text.replace(" ", "").replace(",", "."))
+        except ValueError:
+            return value
+
+    def _export_column_width(self, header, values):
+        preferred = {
+            "n_fact": 12,
+            "rep": 14,
+            "date": 14,
+            "recu": 14,
+            "libelles": 36,
+            "versement": 16,
+            "debours": 16,
+            "honoraires": 16,
+            "tva": 14,
+            "honors_ht": 16,
+        }
+        normalized = self._normal_header(header)
+        if normalized in preferred:
+            return preferred[normalized]
+
+        longest = len(str(header))
+        for value in values:
+            longest = max(longest, len(str(value)))
+        return min(max(longest + 2, 12), 34)
 
     def _log_changes(self, old_df, new_df, headers):
         for row_index in range(min(len(old_df), len(new_df))):
