@@ -56,9 +56,6 @@ class ExcelEditor(ctk.CTkFrame):
         )
         self.export_button.pack(side="left", padx=5)
 
-        self.file_label = ctk.CTkLabel(self.top_bar, text="No table loaded.")
-        self.file_label.pack(side="left", padx=20)
-
         self.input_frame = ctk.CTkFrame(self)
         self.input_frame.pack(side="top", fill="x", padx=10, pady=(0, 5))
 
@@ -151,7 +148,6 @@ class ExcelEditor(ctk.CTkFrame):
             self.sheet.set_sheet_data(data)
             self.sheet.headers(headers)
 
-            self.file_label.configure(text=f"Loaded from {database.storage_label()}")
             self.save_button.configure(state="normal")
 
             self.after(100, self._fit_columns)
@@ -317,7 +313,6 @@ class ExcelEditor(ctk.CTkFrame):
             self.sheet.headers(current_headers)
             self.recalculate()
             self.after(100, self._fit_columns)
-            self.file_label.configure(text=f"Imported: {filepath} (not saved yet)")
             messagebox.showinfo(
                 "Import Excel",
                 "Fichier importé avec succès.\nVérifie ou modifie les données, puis clique sur Save Changes.",
