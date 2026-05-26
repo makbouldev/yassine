@@ -1,6 +1,6 @@
 import customtkinter as ctk
 import pandas as pd
-from tkinter import messagebox
+from tkinter import filedialog, messagebox
 from tksheet import Sheet
 
 import database
@@ -34,6 +34,16 @@ class ExcelEditor(ctk.CTkFrame):
             width=90,
         )
         self.refresh_button.pack(side="left", padx=5)
+
+        self.export_button = ctk.CTkButton(
+            self.top_bar,
+            text="Export Excel",
+            command=self.export_excel,
+            fg_color="#28a745",
+            hover_color="#218838",
+            width=110,
+        )
+        self.export_button.pack(side="left", padx=5)
 
         self.file_label = ctk.CTkLabel(self.top_bar, text="No table loaded.")
         self.file_label.pack(side="left", padx=20)
@@ -263,6 +273,29 @@ class ExcelEditor(ctk.CTkFrame):
             messagebox.showinfo("Succès", "Table sauvegardée dans la base de données!")
         except Exception as exc:
             messagebox.showerror("Erreur", f"Impossible de sauvegarder:\n{exc}")
+
+    def export_excel(self):
+        headers = self.sheet.headers()
+        if not headers:
+            messagebox.showwarning("Erreur", "Aucune table à exporter.")
+            return
+
+        filepath = filedialog.asksaveasfilename(
+            title="Exporter vers Excel",
+            defaultextension=".xlsx",
+            filetypes=[("Excel files", "*.xlsx")],
+            initialfile="export_table.xlsx",
+        )
+        if not filepath:
+            return
+
+        try:
+            data = self.sheet.get_sheet_data()
+            export_df = pd.DataFrame(data, columns=headers)
+            export_df.to_excel(filepath, index=False)
+            messagebox.showinfo("Succès", f"Export Excel créé:\n{filepath}")
+        except Exception as exc:
+            messagebox.showerror("Erreur", f"Impossible d'exporter:\n{exc}")
 
     def _log_changes(self, old_df, new_df, headers):
         for row_index in range(min(len(old_df), len(new_df))):
