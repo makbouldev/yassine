@@ -36,6 +36,16 @@ class ExcelEditor(ctk.CTkFrame):
         )
         self.refresh_button.pack(side="left", padx=5)
 
+        self.import_button = ctk.CTkButton(
+            self.top_bar,
+            text="Import Excel",
+            command=self.import_excel,
+            fg_color="#0d6efd",
+            hover_color="#0b5ed7",
+            width=110,
+        )
+        self.import_button.pack(side="left", padx=5)
+
         self.export_button = ctk.CTkButton(
             self.top_bar,
             text="Export Excel",
@@ -275,6 +285,46 @@ class ExcelEditor(ctk.CTkFrame):
         except Exception as exc:
             messagebox.showerror("Erreur", f"Impossible de sauvegarder:\n{exc}")
 
+    def import_excel(self):
+        current_headers = self.sheet.headers()
+        if not current_headers:
+            messagebox.showwarning("Erreur", "Aucune table chargée.")
+            return
+
+        filepath = filedialog.askopenfilename(
+            title="Importer un fichier Excel",
+            filetypes=[("Excel files", "*.xlsx")],
+        )
+        if not filepath:
+            return
+
+        try:
+            imported_df = self._read_import_dataframe(filepath, current_headers)
+            imported_headers = imported_df.columns.tolist()
+
+            if not self._same_table_headers(current_headers, imported_headers):
+                messagebox.showerror(
+                    "Table incorrecte",
+                    "Le fichier importé n'a pas la même structure.\n\n"
+                    f"Attendu:\n{self._headers_for_message(current_headers)}\n\n"
+                    f"Reçu:\n{self._headers_for_message(imported_headers)}",
+                )
+                return
+
+            imported_df = self._clean_import_dataframe(imported_df, current_headers)
+            data = imported_df.values.tolist()
+            self.sheet.set_sheet_data(data)
+            self.sheet.headers(current_headers)
+            self.recalculate()
+            self.after(100, self._fit_columns)
+            self.file_label.configure(text=f"Imported: {filepath} (not saved yet)")
+            messagebox.showinfo(
+                "Import Excel",
+                "Fichier importé avec succès.\nVérifie ou modifie les données, puis clique sur Save Changes.",
+            )
+        except Exception as exc:
+            messagebox.showerror("Erreur", f"Impossible d'importer:\n{exc}")
+
     def export_excel(self):
         headers = self.sheet.headers()
         if not headers:
@@ -297,6 +347,45 @@ class ExcelEditor(ctk.CTkFrame):
             messagebox.showinfo("Succès", f"Export Excel créé:\n{filepath}")
         except Exception as exc:
             messagebox.showerror("Erreur", f"Impossible d'exporter:\n{exc}")
+
+    def _same_table_headers(self, expected_headers, imported_headers):
+        if len(expected_headers) != len(imported_headers):
+            return False
+        expected = [self._normal_header(header) for header in expected_headers]
+        imported = [self._normal_header(header) for header in imported_headers]
+        return expected == imported
+
+    def _headers_for_message(self, headers):
+        return " | ".join(str(header) for header in headers)
+
+    def _read_import_dataframe(self, filepath, current_headers):
+        direct_df = pd.read_excel(filepath, dtype=str).fillna("")
+        if self._same_table_headers(current_headers, direct_df.columns.tolist()):
+            return direct_df
+
+        raw_df = pd.read_excel(filepath, header=None, dtype=str).fillna("")
+        expected = [self._normal_header(header) for header in current_headers]
+        header_count = len(current_headers)
+        scan_rows = min(len(raw_df), 25)
+
+        for row_index in range(scan_rows):
+            row_values = raw_df.iloc[row_index].tolist()[:header_count]
+            normalized = [self._normal_header(value) for value in row_values]
+            if normalized == expected:
+                imported_df = pd.read_excel(filepath, header=row_index, dtype=str).fillna("")
+                imported_df = imported_df.iloc[:, :header_count]
+                imported_df.columns = current_headers
+                return imported_df
+
+        return direct_df
+
+    def _clean_import_dataframe(self, imported_df, current_headers):
+        cleaned_df = imported_df.iloc[:, : len(current_headers)].copy().fillna("")
+        cleaned_df.columns = current_headers
+
+        first_column = current_headers[0]
+        total_mask = cleaned_df[first_column].apply(lambda value: self._normal_header(value) == "totaux")
+        return cleaned_df.loc[~total_mask]
 
     def _prepare_export_dataframe(self, data, headers):
         export_df = pd.DataFrame(data, columns=headers)
@@ -434,7 +523,7 @@ class ExcelEditor(ctk.CTkFrame):
 
     def _export_column_width(self, header, values):
         preferred = {
-            "n_fact": 12,
+            "nfact": 12,
             "rep": 14,
             "date": 14,
             "recu": 14,
