@@ -2,11 +2,12 @@ import datetime
 import json
 import os
 import sqlite3
+import sys
 from pathlib import Path
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
 DB_FILE = "app_data.db"
-ENV_FILE = Path(__file__).with_name(".env")
+ENV_FILE_NAME = ".env"
 
 DEFAULT_TABLE_HEADERS = [
     "N°Fact",
@@ -25,18 +26,29 @@ TABLE_SEEDED_KEY = "table_seeded"
 
 
 def _load_env_file():
-    if not ENV_FILE.exists():
-        return
+    candidates = [
+        Path(__file__).with_name(ENV_FILE_NAME),
+        Path.cwd() / ENV_FILE_NAME,
+    ]
+    if getattr(sys, "frozen", False):
+        candidates.insert(0, Path(sys.executable).resolve().with_name(ENV_FILE_NAME))
 
-    for raw_line in ENV_FILE.read_text(encoding="utf-8").splitlines():
-        line = raw_line.strip()
-        if not line or line.startswith("#") or "=" not in line:
+    seen = set()
+    for env_file in candidates:
+        env_file = env_file.resolve()
+        if env_file in seen or not env_file.exists():
             continue
-        key, value = line.split("=", 1)
-        key = key.strip()
-        value = value.strip().strip('"').strip("'")
-        if key and key not in os.environ:
-            os.environ[key] = value
+        seen.add(env_file)
+
+        for raw_line in env_file.read_text(encoding="utf-8").splitlines():
+            line = raw_line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, value = line.split("=", 1)
+            key = key.strip()
+            value = value.strip().strip('"').strip("'")
+            if key and key not in os.environ:
+                os.environ[key] = value
 
 
 _load_env_file()

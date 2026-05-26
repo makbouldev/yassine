@@ -32,4 +32,6 @@ Then upload local data once:
 python migrate_to_online_db.py
 ```
 
+If you package the app as an EXE, put the same `.env` file next to the EXE on every PC.
+
 See `ONLINE_DATABASE_SETUP.md` for the full setup steps.

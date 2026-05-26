@@ -49,6 +49,9 @@ python main.py
 Mn daba, login/users/table/history ghadi ykono f nafs online DB, donc users ma
 khas-homch ykono f nafs reseau.
 
+Ila kherjtiha EXE, 7et `.env` f nafs dossier m3a EXE f kol PC. Ila `.env`
+ma kanch 7dah, app ghadi terje3 local b `app_data.db`.
+
 ## Notes
 
 - Default admin kaybqa `admin` / `admin` ila ma kanch admin f database.
