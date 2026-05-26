@@ -41,7 +41,7 @@ def _load_env_file():
         seen.add(env_file)
 
         for raw_line in env_file.read_text(encoding="utf-8").splitlines():
-            line = raw_line.strip()
+            line = raw_line.lstrip("\ufeff").strip()
             if not line or line.startswith("#") or "=" not in line:
                 continue
             key, value = line.split("=", 1)
