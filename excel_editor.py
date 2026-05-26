@@ -493,11 +493,6 @@ class ExcelEditor(ctk.CTkFrame):
                     cell.number_format = '#,##0.00'
             worksheet.row_dimensions[total_row].height = 24
 
-            worksheet.auto_filter.ref = (
-                f"A{header_row}:{max_col_letter}{total_row - 1}"
-                if row_count
-                else f"A{header_row}:{max_col_letter}{header_row}"
-            )
             worksheet.freeze_panes = f"A{data_start_row}"
             worksheet.sheet_view.showGridLines = False
             worksheet.page_setup.orientation = "landscape"
