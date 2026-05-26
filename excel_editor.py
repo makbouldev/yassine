@@ -1,6 +1,7 @@
 import customtkinter as ctk
 import pandas as pd
 from datetime import datetime
+from pathlib import Path
 from tkinter import filedialog, messagebox
 from tksheet import Sheet
 
@@ -288,8 +289,14 @@ class ExcelEditor(ctk.CTkFrame):
             return
 
         filepath = filedialog.askopenfilename(
-            title="Importer un fichier Excel",
-            filetypes=[("Excel files", "*.xlsx")],
+            title="Importer un fichier",
+            filetypes=[
+                ("Supported files", "*.xlsx *.xls *.csv *.tsv *.txt"),
+                ("Excel files", "*.xlsx *.xls"),
+                ("CSV files", "*.csv"),
+                ("Text files", "*.tsv *.txt"),
+                ("All files", "*.*"),
+            ],
         )
         if not filepath:
             return
@@ -354,11 +361,11 @@ class ExcelEditor(ctk.CTkFrame):
         return " | ".join(str(header) for header in headers)
 
     def _read_import_dataframe(self, filepath, current_headers):
-        direct_df = pd.read_excel(filepath, dtype=str).fillna("")
+        direct_df = self._read_tabular_file(filepath).fillna("")
         if self._same_table_headers(current_headers, direct_df.columns.tolist()):
             return direct_df
 
-        raw_df = pd.read_excel(filepath, header=None, dtype=str).fillna("")
+        raw_df = self._read_tabular_file(filepath, header=None).fillna("")
         expected = [self._normal_header(header) for header in current_headers]
         header_count = len(current_headers)
         scan_rows = min(len(raw_df), 25)
@@ -367,12 +374,26 @@ class ExcelEditor(ctk.CTkFrame):
             row_values = raw_df.iloc[row_index].tolist()[:header_count]
             normalized = [self._normal_header(value) for value in row_values]
             if normalized == expected:
-                imported_df = pd.read_excel(filepath, header=row_index, dtype=str).fillna("")
+                imported_df = self._read_tabular_file(filepath, header=row_index).fillna("")
                 imported_df = imported_df.iloc[:, :header_count]
                 imported_df.columns = current_headers
                 return imported_df
 
         return direct_df
+
+    def _read_tabular_file(self, filepath, header=0):
+        extension = Path(filepath).suffix.lower()
+        if extension in {".xlsx", ".xls", ".xlsm"}:
+            return pd.read_excel(filepath, header=header, dtype=str)
+        if extension == ".tsv":
+            return pd.read_csv(filepath, header=header, dtype=str, sep="\t")
+        if extension in {".csv", ".txt"}:
+            return pd.read_csv(filepath, header=header, dtype=str, sep=None, engine="python")
+
+        try:
+            return pd.read_excel(filepath, header=header, dtype=str)
+        except Exception:
+            return pd.read_csv(filepath, header=header, dtype=str, sep=None, engine="python")
 
     def _clean_import_dataframe(self, imported_df, current_headers):
         cleaned_df = imported_df.iloc[:, : len(current_headers)].copy().fillna("")
