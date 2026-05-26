@@ -3,3 +3,6 @@ __pycache__/
 *.pyc
 app_data.db
 app_run.log
+build/
+dist/
+*.spec
