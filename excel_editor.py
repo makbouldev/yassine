@@ -61,15 +61,17 @@ class ExcelEditor(ctk.CTkFrame):
         self.input_frame.pack(side="top", fill="x", padx=10, pady=(0, 5))
 
         self.entries = {}
+        self._entry_containers = []
         input_cols = ["Rep", "Date", "Reçu", "Libelles", "Versement", "Débours"]
 
         for col in input_cols:
             container = ctk.CTkFrame(self.input_frame, fg_color="transparent")
-            container.pack(side="left", padx=4, pady=4, expand=True, fill="x")
-            ctk.CTkLabel(container, text=col, font=ctk.CTkFont(size=11)).pack(anchor="w")
+            container.pack(side="left", padx=2, pady=4, expand=True, fill="x")
+            ctk.CTkLabel(container, text=col, font=ctk.CTkFont(size=10)).pack(anchor="w")
             entry = ctk.CTkEntry(container, height=26)
             entry.pack(fill="x")
             self.entries[col] = entry
+            self._entry_containers.append(container)
 
         self.add_btn = ctk.CTkButton(
             self.input_frame,
@@ -77,9 +79,13 @@ class ExcelEditor(ctk.CTkFrame):
             command=self.add_from_inputs,
             fg_color="#17a2b8",
             hover_color="#138496",
-            width=80,
+            width=75,
         )
-        self.add_btn.pack(side="left", padx=10, pady=(18, 0))
+        self.add_btn.pack(side="left", padx=(4, 6), pady=(18, 0))
+
+        # Resize entries when the input frame width changes
+        self.input_frame.bind("<Configure>", self._on_input_frame_configure)
+
 
         self.sheet_frame = ctk.CTkFrame(self)
         self.sheet_frame.pack(side="top", fill="both", expand=True, padx=10, pady=(0, 5))
@@ -88,6 +94,7 @@ class ExcelEditor(ctk.CTkFrame):
             self.sheet_frame,
             show_x_scrollbar=True,
             show_y_scrollbar=True,
+            show_row_index=False,
         )
         self.sheet.enable_bindings(
             (
@@ -112,6 +119,11 @@ class ExcelEditor(ctk.CTkFrame):
             )
         )
         self.sheet.extra_bindings("end_edit_cell", func=self.on_cell_edited)
+        self.sheet.extra_bindings("end_delete_rows", func=self.on_rows_deleted)
+        self.sheet.extra_bindings("end_insert_rows", func=self.on_rows_inserted)
+        self.sheet.extra_bindings("end_insert_row", func=self.on_rows_inserted)
+        self.sheet.extra_bindings("end_rc_insert_row", func=self.on_rows_inserted)
+        self.sheet.extra_bindings("end_paste", func=self.on_cell_edited)
         self.sheet.pack(fill="both", expand=True)
 
         self.sheet_frame.bind("<Configure>", self._on_frame_configure)
@@ -161,6 +173,27 @@ class ExcelEditor(ctk.CTkFrame):
             self.after_cancel(self._resize_after_id)
         self._resize_after_id = self.after(80, lambda: self._fit_columns(event.width))
 
+    def _on_input_frame_configure(self, event=None):
+        """Shrink / grow the entry widgets so they always fit inside the input bar."""
+        n_entries = len(self.entries)
+        if n_entries == 0:
+            return
+
+        total_w = self.input_frame.winfo_width()
+        if total_w < 10:
+            return
+
+        # Reserve space: button width + padding on each side + small padx per entry
+        btn_reserved = 75 + 10          # button width + its padx
+        entry_padding = 4 * n_entries   # 2px padx × 2 sides per entry
+        available = total_w - btn_reserved - entry_padding
+        entry_w = max(40, available // n_entries)  # never smaller than 40 px
+
+        for entry in self.entries.values():
+            entry.configure(width=entry_w)
+
+
+
     def _fit_columns(self, frame_width=None):
         headers = self.sheet.headers()
         if not headers:
@@ -185,18 +218,6 @@ class ExcelEditor(ctk.CTkFrame):
 
         new_row = [""] * len(headers)
 
-        if "N°Fact" in headers:
-            fact_index = headers.index("N°Fact")
-            data = self.sheet.get_sheet_data()
-            last_fact = 0
-            for row in data:
-                value = str(row[fact_index]).strip()
-                try:
-                    last_fact = max(last_fact, int(value))
-                except ValueError:
-                    pass
-            new_row[fact_index] = f"{last_fact + 1:02d}"
-
         for col_name, entry in self.entries.items():
             if col_name in headers:
                 new_row[headers.index(col_name)] = entry.get().strip()
@@ -207,8 +228,77 @@ class ExcelEditor(ctk.CTkFrame):
         self.sheet.set_sheet_data(data)
         self.recalculate()
 
+    def _sort_data_by_date(self, headers, data):
+        """Sort rows by the Date column using pandas robust parser."""
+        if "Date" not in headers or not data:
+            return data
+        date_idx = headers.index("Date")
+        import pandas as pd
+
+        def _key(row):
+            raw = str(row[date_idx]).strip()
+            if not raw:
+                return pd.Timestamp.max
+            # Try dayfirst (French) then monthfirst (ISO / US)
+            for dayfirst in (True, False):
+                try:
+                    ts = pd.to_datetime(raw, dayfirst=dayfirst)
+                    return ts
+                except Exception:
+                    continue
+            return pd.Timestamp.max
+
+        try:
+            data.sort(key=_key)
+        except Exception:
+            pass
+        return data
+
     def on_cell_edited(self, event=None):
         self.recalculate()
+
+    def on_rows_inserted(self, event=None):
+        self.recalculate()
+
+    def on_rows_deleted(self, event=None):
+        """Called right after the user deletes one or more rows via right-click menu."""
+        # event.rows contains the indices of the deleted rows — but by the time
+        # this fires the rows are gone from the sheet, so we work from the
+        # snapshot we took in self.df (the last saved state).
+        if self.df is None:
+            return
+
+        deleted_indices = []
+        if event is not None and hasattr(event, "rows"):
+            deleted_indices = list(event.rows)
+        elif event is not None and isinstance(event, dict):
+            deleted_indices = event.get("rows", [])
+
+        headers = list(self.df.columns)
+        fact_col = "N°Fact" if "N°Fact" in headers else headers[0]
+
+        for row_idx in deleted_indices:
+            try:
+                row_data = self.df.iloc[row_idx]
+                fact_val = str(row_data.get(fact_col, row_idx + 2)).strip()
+                summary = " | ".join(
+                    f"{col}={str(row_data.get(col, '')).strip()}"
+                    for col in headers[:5]
+                )
+                database.log_edit(
+                    self.current_user,
+                    row_idx + 2,
+                    "LIGNE SUPPRIMÉE",
+                    f"N°{fact_val}  ({summary})",
+                    "",
+                )
+            except (IndexError, KeyError):
+                database.log_edit(
+                    self.current_user, row_idx + 2, "LIGNE SUPPRIMÉE", f"Ligne {row_idx + 2}", ""
+                )
+
+        self.recalculate()
+
 
     def recalculate(self, event=None):
         headers = self.sheet.headers()
@@ -226,7 +316,17 @@ class ExcelEditor(ctk.CTkFrame):
 
         data = self.sheet.get_sheet_data()
 
-        for row_index, row in enumerate(data):
+        # Sort all data by Date before calculations and re-numbering
+        data = self._sort_data_by_date(headers, data)
+
+        # Re-number N°Fact sequentially
+        if "N°Fact" in headers:
+            fact_idx = headers.index("N°Fact")
+            for i, row in enumerate(data):
+                row[fact_idx] = f"{i + 1:02d}"
+
+        # Recalculate computed columns in-place
+        for row in data:
             try:
                 versement_raw = str(row[versement_index]).replace(",", ".").replace(" ", "").strip()
                 debours_raw = str(row[debours_index]).replace(",", ".").replace(" ", "").strip()
@@ -239,19 +339,18 @@ class ExcelEditor(ctk.CTkFrame):
                 ht = honoraires / 1.2
                 tva = honoraires - ht
 
-                for column_index, value in (
-                    (honoraires_index, honoraires),
-                    (tva_index, tva),
-                    (ht_index, ht),
-                ):
-                    formatted = self._format_money(value)
-                    if str(row[column_index]) != formatted:
-                        self.sheet.set_cell_data(row_index, column_index, formatted)
+                row[honoraires_index] = self._format_money(honoraires)
+                row[tva_index] = self._format_money(tva)
+                row[ht_index] = self._format_money(ht)
             except (ValueError, IndexError):
                 pass
 
+        # Update the sheet with sorted, re-numbered, and calculated data
+        self.sheet.set_sheet_data(data)
+
+        # Calculate totals from the updated data
         totals = {column: 0.0 for column in self.total_labels}
-        for row in self.sheet.get_sheet_data():
+        for row in data:
             for column_name in totals:
                 try:
                     column_index = headers.index(column_name)
@@ -568,5 +667,25 @@ class ExcelEditor(ctk.CTkFrame):
                 if old_value != new_value and not (old_value in ("nan", "") and new_value == ""):
                     database.log_edit(self.current_user, row_index + 2, column, old_value, new_value)
 
+        # Rows added
         for row_index in range(len(old_df), len(new_df)):
             database.log_edit(self.current_user, row_index + 2, "LIGNE", "", "AJOUTÉE")
+
+        # Rows deleted (save-time fallback — on_rows_deleted normally catches this earlier)
+        if len(old_df) > len(new_df):
+            fact_col = "N°Fact" if "N°Fact" in old_df.columns else old_df.columns[0]
+            for row_index in range(len(new_df), len(old_df)):
+                try:
+                    row_data = old_df.iloc[row_index]
+                    fact_val = str(row_data.get(fact_col, row_index + 2)).strip()
+                    database.log_edit(
+                        self.current_user,
+                        row_index + 2,
+                        "LIGNE SUPPRIMÉE",
+                        f"N°{fact_val}",
+                        "",
+                    )
+                except (IndexError, KeyError):
+                    database.log_edit(
+                        self.current_user, row_index + 2, "LIGNE SUPPRIMÉE", f"Ligne {row_index + 2}", ""
+                    )
